@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from copy import deepcopy
 from io import BytesIO
 from pathlib import Path
@@ -28,25 +29,47 @@ SCORES = {
 app = FastAPI(title="Student Progress Maker")
 
 
-def read_students(contents):
-    with ZipFile(BytesIO(contents)) as archive:
-        if sum(member.file_size for member in archive.infolist()) > 50 * 1024 * 1024:
-            raise ValueError("The expanded workbook exceeds 50 MB.")
-    book = load_workbook(BytesIO(contents), read_only=True, data_only=True)
+REQUIRED_HEADERS = {"StudentName", *SCORES.values()}
+
+
+@contextmanager
+def open_class_record(contents):
     try:
-        required = {"StudentName", *SCORES.values()}
-        matches = []
-        for sheet in book.worksheets:
-            header = next(sheet.iter_rows(max_row=1, max_col=256, values_only=True))
-            names = [str(value).strip() for value in header]
-            if required.issubset(names):
-                matches.append((sheet, names))
-        if len(matches) != 1:
-            raise ValueError("Provide exactly one worksheet with the class-record headers in row 1.")
-        sheet, names = matches[0]
-        if any(names.count(name) != 1 for name in required):
-            raise ValueError("The class record contains duplicate required column headers.")
-        columns = {name: names.index(name) for name in required}
+        with ZipFile(BytesIO(contents)) as archive:
+            if sum(member.file_size for member in archive.infolist()) > 50 * 1024 * 1024:
+                raise ValueError("The expanded workbook exceeds 50 MB.")
+        book = load_workbook(BytesIO(contents), read_only=True, data_only=True)
+        try:
+            yield book
+        finally:
+            book.close()
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except (BadZipFile, InvalidFileException, KeyError, OSError, XMLSyntaxError) as exc:
+        raise HTTPException(400, "Excel could not read this class record. Re-save it and try again.") from exc
+
+
+def worksheet_columns(sheet):
+    header = next(sheet.iter_rows(max_row=1, max_col=256, values_only=True), ())
+    names = [str(value).strip() for value in header]
+    if any(names.count(name) != 1 for name in REQUIRED_HEADERS):
+        return None
+    return {name: names.index(name) for name in REQUIRED_HEADERS}
+
+
+def read_students(contents, worksheet=None):
+    with open_class_record(contents) as book:
+        if worksheet is None:
+            if len(book.sheetnames) != 1:
+                raise ValueError("Select a worksheet from the uploaded class record.")
+            worksheet = book.sheetnames[0]
+        sheets = {sheet.title: sheet for sheet in book.worksheets}
+        if worksheet not in sheets:
+            raise ValueError("The selected worksheet is missing from the class record.")
+        sheet = sheets[worksheet]
+        columns = worksheet_columns(sheet)
+        if columns is None:
+            raise ValueError("The selected worksheet needs one of each required class-record header in row 1.")
         students = []
         for row_number, row in enumerate(
             sheet.iter_rows(min_row=2, max_col=max(columns.values()) + 1), start=2
@@ -66,8 +89,6 @@ def read_students(contents):
         if not students:
             raise ValueError("The class record contains no student names.")
         return students
-    finally:
-        book.close()
 
 
 def display(value):
@@ -163,6 +184,25 @@ def download_class_record_template():
     )
 
 
+def read_upload(workbook):
+    if Path(workbook.filename or "").suffix.lower() not in {".xlsx", ".xlsm"}:
+        raise HTTPException(400, "Choose an Excel .xlsx or .xlsm class record.")
+    contents = workbook.file.read(UPLOAD_LIMIT + 1)
+    if len(contents) > UPLOAD_LIMIT:
+        raise HTTPException(413, "The class record exceeds 10 MB.")
+    return contents
+
+
+@app.post("/worksheets")
+def list_worksheets(workbook: Annotated[UploadFile, File()]):
+    with open_class_record(read_upload(workbook)) as book:
+        sheets = {sheet.title: sheet for sheet in book.worksheets}
+        return [
+            {"name": name, "compatible": name in sheets and worksheet_columns(sheets[name]) is not None}
+            for name in book.sheetnames
+        ]
+
+
 @app.post("/generate")
 def generate(
     workbook: Annotated[UploadFile, File()],
@@ -173,12 +213,9 @@ def generate(
     term: Annotated[Literal["first", "second", "summer"], Form()],
     course_type: Annotated[Literal["lecture", "laboratory", "rle"], Form()],
     output_format: Annotated[Literal["combined", "individual"], Form()] = "combined",
+    worksheet: Annotated[str | None, Form()] = None,
 ):
-    if Path(workbook.filename or "").suffix.lower() not in {".xlsx", ".xlsm"}:
-        raise HTTPException(400, "Choose an Excel .xlsx or .xlsm class record.")
-    contents = workbook.file.read(UPLOAD_LIMIT + 1)
-    if len(contents) > UPLOAD_LIMIT:
-        raise HTTPException(413, "The class record exceeds 10 MB.")
+    contents = read_upload(workbook)
     fields = {
         "Section": section.strip(),
         "CourseCode": course_code.strip(),
@@ -187,12 +224,7 @@ def generate(
     }
     if any(not value or any(ord(char) < 32 for char in value) for value in fields.values()):
         raise HTTPException(400, "Enter all class details on a single line per field.")
-    try:
-        students = read_students(contents)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
-    except (BadZipFile, InvalidFileException, KeyError, OSError, XMLSyntaxError) as exc:
-        raise HTTPException(400, "Excel could not read this class record. Re-save it and try again.") from exc
+    students = read_students(contents, worksheet)
 
     if output_format == "individual":
         return Response(

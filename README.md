@@ -25,6 +25,6 @@ The updater requires Docker Compose v2 and a clean checkout. It pulls the tracke
 
 ## Workbook and template
 
-Use an XLSX or XLSM workbook with one worksheet matching the sample class record. Put the headers in row 1. The app reads StudentName, PrelimExam, MidtermExam, FinalExam, MidtermGrade and columns 1–7 for each of MQ, MA, FQ and FA. Blank scores remain blank. Formula results come from the values saved by Excel. Recalculate and save before uploading a workbook with formulas.
+Use an XLSX or XLSM workbook matching the sample class record. If the workbook has multiple tabs, choose the worksheet to use. Put the headers in row 1. The app reads StudentName, PrelimExam, MidtermExam, FinalExam, MidtermGrade and columns 1–7 for each of MQ, MA, FQ and FA. Blank scores remain blank. Formula results come from the values saved by Excel. Recalculate and save before uploading a workbook with formulas.
 
 The template's first exam row serves as the column labels. The second row receives the scores. Attendance, experiments, other activities and signatures remain available for manual entry.

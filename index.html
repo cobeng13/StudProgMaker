@@ -13,6 +13,7 @@ label { display: grid; gap: .35rem; font-weight: 600; }
 input, select, button { font: inherit; padding: .65rem; min-width: 0; border: 1px solid #8799aa; border-radius: .4rem; }
 button { background: #164e75; color: white; cursor: pointer; }
 button:disabled { opacity: .65; }
+[hidden] { display: none !important; }
 .template-download { display: inline-block; padding: .65rem; border: 1px solid #164e75; border-radius: .4rem; color: #164e75; font-weight: 600; }
 #status { min-height: 1.5em; }
 </style>
@@ -25,6 +26,7 @@ button:disabled { opacity: .65; }
 <p><a class="template-download" href="/class-record-template" download>Download class record template (.xlsm)</a></p>
 <form action="/generate" method="post" enctype="multipart/form-data">
 <label>Class record (.xlsx or .xlsm)<input name="workbook" type="file" accept=".xlsx,.xlsm" required></label>
+<label id="worksheet-field" hidden>Worksheet<select name="worksheet" disabled></select></label>
 <label>Program / Year / Section<input name="section" placeholder="Example: BS Pharmacy 1A" maxlength="60" required></label>
 <label>Course code<input name="course_code" maxlength="30" required></label>
 <label>Academic year<input name="academic_year" placeholder="2026–2027" maxlength="20" required></label>
@@ -47,12 +49,60 @@ button:disabled { opacity: .65; }
 const form = document.querySelector("form");
 const button = form.querySelector("button");
 const status = document.querySelector("#status");
+const workbook = form.elements.workbook;
+const worksheet = form.elements.worksheet;
+const worksheetField = document.querySelector("#worksheet-field");
+let inspection;
+
+workbook.addEventListener("change", async () => {
+  inspection?.abort();
+  inspection = new AbortController();
+  const {signal} = inspection;
+  worksheet.replaceChildren();
+  worksheet.disabled = true;
+  worksheet.required = false;
+  worksheetField.hidden = true;
+  button.disabled = true;
+  status.textContent = "";
+  if (!workbook.files.length) return;
+
+  status.textContent = "Checking workbook sheets…";
+  try {
+    const data = new FormData();
+    data.append("workbook", workbook.files[0]);
+    const response = await fetch("/worksheets", {method: "POST", body: data, signal});
+    const sheets = await response.json();
+    if (signal.aborted) return;
+    if (!response.ok) throw new Error(sheets.detail || "Could not read the workbook.");
+    if (!sheets.some((sheet) => sheet.compatible)) {
+      throw new Error("No worksheet matches the class record format.");
+    }
+    if (sheets.length > 1) {
+      worksheet.add(new Option("Choose a worksheet", ""));
+      for (const sheet of sheets) {
+        const option = new Option(sheet.compatible ? sheet.name : sheet.name + " (wrong format)", sheet.name);
+        option.disabled = !sheet.compatible;
+        worksheet.add(option);
+      }
+      worksheetField.hidden = false;
+      worksheet.disabled = false;
+      worksheet.required = true;
+    }
+    status.textContent = "";
+    button.disabled = false;
+  } catch (error) {
+    if (!signal.aborted) status.textContent = error.message;
+  }
+});
+
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
+  const data = new FormData(form);
+  workbook.disabled = true;
   button.disabled = true;
   status.textContent = "Generating progress sheets…";
   try {
-    const response = await fetch(form.action, {method: "POST", body: new FormData(form)});
+    const response = await fetch(form.action, {method: "POST", body: data});
     if (!response.ok) {
       const problem = await response.json().catch(() => ({}));
       throw new Error(typeof problem.detail === "string" ? problem.detail : "Check the form and try again.");
@@ -69,6 +119,7 @@ form.addEventListener("submit", async (event) => {
   } catch (error) {
     status.textContent = error.message;
   } finally {
+    workbook.disabled = false;
     button.disabled = false;
   }
 });
