@@ -7,7 +7,6 @@ from zipfile import BadZipFile, ZipFile
 from docx import Document
 from docx.enum.section import WD_SECTION_START
 from docx.oxml.ns import qn
-from docx.shared import Pt
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, Response
 from lxml.etree import XMLSyntaxError
@@ -92,7 +91,6 @@ def fill_sheet(template, student, fields, term, course_type):
         if paragraph.text.startswith("NAME: "):
             first_tab = True
             for run in paragraph.runs:
-                run.font.size = Pt(9)
                 if run.text == "\t":
                     run.text = "  " if first_tab else ""
                     first_tab = False
