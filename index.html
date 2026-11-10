@@ -26,6 +26,9 @@ button:disabled { opacity: .65; }
 <label>Course code<input name="course_code" maxlength="30" required></label>
 <label>Academic year<input name="academic_year" placeholder="2026–2027" maxlength="20" required></label>
 <label>Course description<input name="course_description" maxlength="100" required></label>
+<label>Course type<select name="course_type" required>
+<option value="">Choose a course type</option><option value="lecture">Lecture</option><option value="laboratory">Laboratory</option><option value="rle">RLE</option>
+</select></label>
 <label>Term<select name="term" required>
 <option value="">Choose a term</option><option value="first">First</option><option value="second">Second</option><option value="summer">Summer</option>
 </select></label>

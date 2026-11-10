@@ -7,6 +7,7 @@ from zipfile import BadZipFile, ZipFile
 from docx import Document
 from docx.enum.section import WD_SECTION_START
 from docx.oxml.ns import qn
+from docx.shared import Pt
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, Response
 from lxml.etree import XMLSyntaxError
@@ -17,6 +18,7 @@ ROOT = Path(__file__).resolve().parent
 TEMPLATE = ROOT / "Student Progress Template.docx"
 UPLOAD_LIMIT = 10 * 1024 * 1024
 TERMS = ("first", "second", "summer")
+COURSE_TYPES = ("lecture", "laboratory", "rle")
 EXAMS = {"PE": "PrelimExam", "ME": "MidtermExam", "FE": "FinalExam"}
 SCORES = {
     **EXAMS,
@@ -76,7 +78,7 @@ def display(value):
     return str(value)
 
 
-def fill_sheet(template, student, fields, term):
+def fill_sheet(template, student, fields, term, course_type):
     doc = Document(BytesIO(template))
     for paragraph in doc.paragraphs:
         # Edit text nodes directly so tabs and the original checkbox symbols survive.
@@ -87,8 +89,21 @@ def fill_sheet(template, student, fields, term):
             elif original == ": AcadYear":
                 node.text = ": " + fields["AcadYear"]
         symbols = paragraph._p.xpath("./w:r/w:sym")
-        if " TERM: " in paragraph.text:
+        if paragraph.text.startswith("NAME: "):
+            first_tab = True
+            for run in paragraph.runs:
+                run.font.size = Pt(9)
+                if run.text == "\t":
+                    run.text = "  " if first_tab else ""
+                    first_tab = False
+                else:
+                    first_tab = True
+            for node in paragraph._p.xpath("./w:r/w:t"):
+                if node.text in (" FIRST ", " SECOND ", " SUMMER"):
+                    node.text = "\u00a0" + node.text[1:]
             symbols[TERMS.index(term)].set(qn("w:char"), "F0FE")
+        elif paragraph.text.startswith("COURSE CODE: "):
+            symbols[COURSE_TYPES.index(course_type)].set(qn("w:char"), "F0FE")
 
     for table_index, table in enumerate(doc.tables):
         for row_index, row in enumerate(table.rows):
@@ -105,11 +120,11 @@ def fill_sheet(template, student, fields, term):
     return doc
 
 
-def build_document(students, fields, term):
+def build_document(students, fields, term, course_type):
     template = TEMPLATE.read_bytes()
-    document = fill_sheet(template, students[0], {**fields, "StudentName": students[0]["StudentName"]}, term)
+    document = fill_sheet(template, students[0], {**fields, "StudentName": students[0]["StudentName"]}, term, course_type)
     for student in students[1:]:
-        sheet = fill_sheet(template, student, {**fields, "StudentName": student["StudentName"]}, term)
+        sheet = fill_sheet(template, student, {**fields, "StudentName": student["StudentName"]}, term, course_type)
         section = document.add_section(WD_SECTION_START.NEW_PAGE)
         for element in sheet.element.body:
             if element.tag != qn("w:sectPr"):
@@ -133,6 +148,7 @@ def generate(
     academic_year: Annotated[str, Form(max_length=20)],
     course_description: Annotated[str, Form(max_length=100)],
     term: Annotated[Literal["first", "second", "summer"], Form()],
+    course_type: Annotated[Literal["lecture", "laboratory", "rle"], Form()],
 ):
     if Path(workbook.filename or "").suffix.lower() not in {".xlsx", ".xlsm"}:
         raise HTTPException(400, "Choose an Excel .xlsx or .xlsm class record.")
@@ -155,7 +171,7 @@ def generate(
         raise HTTPException(400, "Excel could not read this class record. Re-save it and try again.") from exc
 
     return Response(
-        build_document(students, fields, term),
+        build_document(students, fields, term, course_type),
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={
             "Content-Disposition": 'attachment; filename="student-progress-sheets.docx"',

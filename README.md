@@ -1,6 +1,6 @@
 # Student Progress Maker
 
-Upload a class record, enter the program/year/section, course code, academic year, course description and term, then download one Word document with a progress sheet for every named student.
+Upload a class record, enter the program/year/section, course code, academic year, course description, course type and term, then download one Word document with a progress sheet for every named student.
 
 ## Run with Docker
 
