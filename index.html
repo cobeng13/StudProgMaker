@@ -13,6 +13,7 @@ label { display: grid; gap: .35rem; font-weight: 600; }
 input, select, button { font: inherit; padding: .65rem; min-width: 0; border: 1px solid #8799aa; border-radius: .4rem; }
 button { background: #164e75; color: white; cursor: pointer; }
 button:disabled { opacity: .65; }
+.template-download { display: inline-block; padding: .65rem; border: 1px solid #164e75; border-radius: .4rem; color: #164e75; font-weight: 600; }
 #status { min-height: 1.5em; }
 </style>
 </head>
@@ -20,6 +21,8 @@ button:disabled { opacity: .65; }
 <main>
 <h1>Student Progress Maker</h1>
 <p>Upload an Excel class record and download one Word document with a progress sheet for every student.</p>
+<p>Use this class record format to generate progress sheets.</p>
+<p><a class="template-download" href="/class-record-template" download>Download class record template (.xlsm)</a></p>
 <form action="/generate" method="post" enctype="multipart/form-data">
 <label>Class record (.xlsx or .xlsm)<input name="workbook" type="file" accept=".xlsx,.xlsm" required></label>
 <label>Program / Year / Section<input name="section" placeholder="Example: BS Pharmacy 1A" maxlength="60" required></label>

@@ -8,7 +8,7 @@ from docx import Document
 from docx.enum.section import WD_SECTION_START
 from docx.oxml.ns import qn
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from lxml.etree import XMLSyntaxError
 from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
@@ -136,6 +136,16 @@ def build_document(students, fields, term, course_type):
 @app.get("/", response_class=HTMLResponse)
 def index():
     return (ROOT / "index.html").read_text(encoding="utf-8")
+
+
+@app.get("/class-record-template")
+def download_class_record_template():
+    workbook = ROOT / "with_macros_-_2026_blank_grading_sheet_with_autotransmuter.xlsm"
+    return FileResponse(
+        workbook,
+        filename=workbook.name,
+        media_type="application/vnd.ms-excel.sheet.macroEnabled.12",
+    )
 
 
 @app.post("/generate")

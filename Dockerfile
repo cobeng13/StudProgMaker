@@ -3,7 +3,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt && useradd --uid 10001 appuser
-COPY app.py index.html ./
+COPY app.py index.html with_macros_-_2026_blank_grading_sheet_with_autotransmuter.xlsm ./
 COPY ["Student Progress Template.docx", "./"]
 USER appuser
 EXPOSE 8000
