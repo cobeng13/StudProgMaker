@@ -20,7 +20,7 @@ button:disabled { opacity: .65; }
 <body>
 <main>
 <h1>Student Progress Maker</h1>
-<p>Upload an Excel class record and download one Word document with a progress sheet for every student.</p>
+<p>Upload an Excel class record and choose how to download your student progress sheets.</p>
 <p>Use this class record format to generate progress sheets.</p>
 <p><a class="template-download" href="/class-record-template" download>Download class record template (.xlsm)</a></p>
 <form action="/generate" method="post" enctype="multipart/form-data">
@@ -34,6 +34,10 @@ button:disabled { opacity: .65; }
 </select></label>
 <label>Term<select name="term" required>
 <option value="">Choose a term</option><option value="first">First</option><option value="second">Second</option><option value="summer">Summer</option>
+</select></label>
+<label>Output format<select name="output_format">
+<option value="combined">One Word file for all students</option>
+<option value="individual">One Word file per student (ZIP)</option>
 </select></label>
 <button type="submit">Download progress sheets</button>
 </form>
@@ -56,10 +60,12 @@ form.addEventListener("submit", async (event) => {
     const url = URL.createObjectURL(await response.blob());
     const link = document.createElement("a");
     link.href = url;
-    link.download = "student-progress-sheets.docx";
+    link.download = response.headers.get("Content-Type") === "application/zip"
+      ? "student-progress-sheets.zip"
+      : "student-progress-sheets.docx";
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    status.textContent = "Your Word document is ready.";
+    status.textContent = "Your download is ready.";
   } catch (error) {
     status.textContent = error.message;
   } finally {

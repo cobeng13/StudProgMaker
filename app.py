@@ -2,6 +2,7 @@ from copy import deepcopy
 from io import BytesIO
 from pathlib import Path
 from typing import Annotated, Literal
+import re
 from zipfile import BadZipFile, ZipFile
 
 from docx import Document
@@ -133,6 +134,20 @@ def build_document(students, fields, term, course_type):
     return output.getvalue()
 
 
+def build_student_zip(students, fields, term, course_type):
+    template = TEMPLATE.read_bytes()
+    output = BytesIO()
+    with ZipFile(output, "w") as archive:
+        for number, student in enumerate(students, start=1):
+            name = student["StudentName"]
+            filename = re.sub(r"[^\w .-]", "_", name)[:100].strip(" .")
+            sheet = fill_sheet(template, student, {**fields, "StudentName": name}, term, course_type)
+            document = BytesIO()
+            sheet.save(document)
+            archive.writestr(f"{number:03d} - {filename or 'Student'}.docx", document.getvalue())
+    return output.getvalue()
+
+
 @app.get("/", response_class=HTMLResponse)
 def index():
     return (ROOT / "index.html").read_text(encoding="utf-8")
@@ -157,6 +172,7 @@ def generate(
     course_description: Annotated[str, Form(max_length=100)],
     term: Annotated[Literal["first", "second", "summer"], Form()],
     course_type: Annotated[Literal["lecture", "laboratory", "rle"], Form()],
+    output_format: Annotated[Literal["combined", "individual"], Form()] = "combined",
 ):
     if Path(workbook.filename or "").suffix.lower() not in {".xlsx", ".xlsm"}:
         raise HTTPException(400, "Choose an Excel .xlsx or .xlsm class record.")
@@ -178,6 +194,15 @@ def generate(
     except (BadZipFile, InvalidFileException, KeyError, OSError, XMLSyntaxError) as exc:
         raise HTTPException(400, "Excel could not read this class record. Re-save it and try again.") from exc
 
+    if output_format == "individual":
+        return Response(
+            build_student_zip(students, fields, term, course_type),
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": 'attachment; filename="student-progress-sheets.zip"',
+                "Cache-Control": "no-store",
+            },
+        )
     return Response(
         build_document(students, fields, term, course_type),
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
