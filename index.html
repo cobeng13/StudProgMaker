@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Student Progress Maker</title>
+<style>
+body { background: #eef2f6; color: #172738; font: 1rem system-ui, sans-serif; margin: 0; }
+main { background: white; max-width: 42rem; margin: 5vh auto; padding: clamp(1rem, 5vw, 3rem); border-radius: 1rem; }
+h1 { margin-top: 0; }
+form { display: grid; gap: 1rem; }
+label { display: grid; gap: .35rem; font-weight: 600; }
+input, select, button { font: inherit; padding: .65rem; min-width: 0; border: 1px solid #8799aa; border-radius: .4rem; }
+button { background: #164e75; color: white; cursor: pointer; }
+button:disabled { opacity: .65; }
+#status { min-height: 1.5em; }
+</style>
+</head>
+<body>
+<main>
+<h1>Student Progress Maker</h1>
+<p>Upload an Excel class record and download one Word document with a progress sheet for every student.</p>
+<form action="/generate" method="post" enctype="multipart/form-data">
+<label>Class record (.xlsx or .xlsm)<input name="workbook" type="file" accept=".xlsx,.xlsm" required></label>
+<label>Program / Year / Section<input name="section" placeholder="Example: BS Pharmacy 1A" maxlength="60" required></label>
+<label>Course code<input name="course_code" maxlength="30" required></label>
+<label>Academic year<input name="academic_year" placeholder="2026–2027" maxlength="20" required></label>
+<label>Course description<input name="course_description" maxlength="100" required></label>
+<label>Term<select name="term" required>
+<option value="">Choose a term</option><option value="first">First</option><option value="second">Second</option><option value="summer">Summer</option>
+</select></label>
+<button type="submit">Download progress sheets</button>
+</form>
+<p id="status" role="status"></p>
+</main>
+<script>
+const form = document.querySelector("form");
+const button = form.querySelector("button");
+const status = document.querySelector("#status");
+form.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  button.disabled = true;
+  status.textContent = "Generating progress sheets…";
+  try {
+    const response = await fetch(form.action, {method: "POST", body: new FormData(form)});
+    if (!response.ok) {
+      const problem = await response.json().catch(() => ({}));
+      throw new Error(typeof problem.detail === "string" ? problem.detail : "Check the form and try again.");
+    }
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "student-progress-sheets.docx";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    status.textContent = "Your Word document is ready.";
+  } catch (error) {
+    status.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+</script>
+</body>
+</html>

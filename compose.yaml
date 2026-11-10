@@ -1,0 +1,11 @@
+services:
+  web:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "${STUDPROG_BIND_ADDRESS:-127.0.0.1}:${STUDPROG_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/', timeout=3).close()"]
+      interval: 5s
+      timeout: 4s
+      retries: 5
